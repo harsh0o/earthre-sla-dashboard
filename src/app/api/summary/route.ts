@@ -99,7 +99,12 @@ export async function GET(req: Request) {
       }),
     )
     .filter((x) => x != null && x.availability < SLA_THRESHOLD)
-    .sort((a, b) => a!.availability - b!.availability)
+    .sort(
+      (a, b) =>
+        a!.availability - b!.availability ||
+        b!.down - a!.down ||
+        a!.serviceId.localeCompare(b!.serviceId),
+    )
     .slice(0, 3);
 
   return NextResponse.json({

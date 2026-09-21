@@ -6,79 +6,137 @@ import StatsSection from "./StatsSection";
 import LogsView, { type InitialLogs } from "./LogsView";
 import type { ProcessResult, SummaryResponse } from "./types";
 
+interface HistoryEntry {
+  id: string;
+  filename: string;
+  uploadedAt: string;
+  keptChecks: number;
+}
+
 /** Single-screen composition: upload → stats (collapsible) → logs. */
 export default function Dashboard() {
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [initialLogs, setInitialLogs] = useState<InitialLogs | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[] | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const handleProcessed = useCallback(async (r: ProcessResult) => {
-    setResult(r);
-    setSummary(null);
-    setInitialLogs(null);
+  const loadDataset = useCallback(async (datasetId: string, meta: Omit<ProcessResult, "datasetId"> | null) => {
     setLoadingSummary(true);
     try {
-      const day = r.dateMin?.slice(0, 10);
-      const [sRes, lRes] = await Promise.all([
-        fetch(`/api/summary?datasetId=${encodeURIComponent(r.datasetId)}`),
-        fetch(
-          `/api/logs?datasetId=${encodeURIComponent(r.datasetId)}&from=${day ?? ""}&to=${day ?? ""}&page=1&pageSize=50`,
-        ),
-      ]);
-      if (sRes.ok) setSummary((await sRes.json()) as SummaryResponse);
+      const sRes = await fetch(`/api/summary?datasetId=${encodeURIComponent(datasetId)}`);
+      if (!sRes.ok) return;
+      const s = (await sRes.json()) as SummaryResponse;
+      const day = meta?.dateMin?.slice(0, 10) ?? s.span.from?.slice(0, 10) ?? "";
+      const lRes = await fetch(
+        `/api/logs?datasetId=${encodeURIComponent(datasetId)}&from=${day}&to=${day}&page=1&pageSize=50`,
+      );
+      const resolved: ProcessResult = meta
+        ? { datasetId, ...meta }
+        : {
+            datasetId,
+            filename: s.filename,
+            totalRows: s.overall.total,
+            keptChecks: s.overall.total,
+            quarantined: s.quality.quarantined,
+            exactDupesSuppressed: s.quality.exactDupes,
+            overlapsCollapsed: s.quality.overlaps,
+            epochFixed: s.quality.epochFixed,
+            missingLatency: s.quality.missingLatency,
+            invalidLatency: s.quality.invalidLatency,
+            unknownStatus: s.quality.unknownStatus,
+            dateMin: s.span.from,
+            dateMax: s.span.to,
+            services: s.byService.map((x) => x.serviceId),
+            persistent: s.persistent,
+          };
+      setResult(resolved);
+      setSummary(s);
       if (lRes.ok) {
         const body = await lRes.json();
         setInitialLogs({ rows: body.rows, total: body.total, totalPages: body.totalPages });
+      } else {
+        setInitialLogs({ rows: [], total: 0, totalPages: 1 });
       }
     } finally {
       setLoadingSummary(false);
     }
   }, []);
 
-  return (
-    <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-      <UploadCard onProcessed={handleProcessed} />
+  const handleProcessed = useCallback(
+    async (r: ProcessResult) => {
+      const { datasetId, ...meta } = r;
+      await loadDataset(datasetId, meta);
+    },
+    [loadDataset],
+  );
 
-      {result && (
-        <section className="neu p-5" aria-label="Upload report">
-          <h2 className="text-base font-semibold">Cleaning report</h2>
-          <dl className="num mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px] text-slate-600">
-            <dt className="text-slate-400">File</dt>
-            <dd className="truncate font-medium text-slate-700">{result.filename}</dd>
-            <dt className="text-slate-400">Rows → checks</dt>
-            <dd>
-              {result.totalRows.toLocaleString()} → {result.keptChecks.toLocaleString()}
-            </dd>
-            <dt className="text-slate-400">Quarantined</dt>
-            <dd>{result.quarantined.toLocaleString()}</dd>
-            <dt className="text-slate-400">Dupes / overlaps</dt>
-            <dd>
-              {result.exactDupesSuppressed} / {result.overlapsCollapsed}
-            </dd>
-            <dt className="text-slate-400">Epoch fixed</dt>
-            <dd>{result.epochFixed}</dd>
-            <dt className="text-slate-400">Span</dt>
-            <dd className="col-span-1">
-              {result.dateMin?.slice(0, 10)} → {result.dateMax?.slice(0, 10)}
-            </dd>
-          </dl>
-          <p className={`pill mt-3 ${result.persistent ? "pill-up" : "pill-warn"}`}>
-            {result.persistent ? "Persisted to Supabase" : "Dev-memory mode (add Supabase keys to persist)"}
-          </p>
-        </section>
+  /** History is loaded on explicit click (no fetch effects anywhere in the UI). */
+  async function showHistory() {
+    if (history) {
+      setHistory(null);
+      return;
+    }
+    setLoadingHistory(true);
+    try {
+      const res = await fetch("/api/datasets");
+      if (res.ok) setHistory(((await res.json()).datasets as HistoryEntry[]) ?? []);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-end">
+        <button onClick={() => void showHistory()} className="btn btn-ghost" aria-expanded={history != null}>
+          {loadingHistory ? "Loading…" : history ? "Hide previous uploads" : "Previous uploads"}
+        </button>
+      </div>
+
+      {history && (
+        <div className="card mb-4 p-3" aria-label="Previous uploads">
+          {history.length === 0 && (
+            <p className="px-2 py-1 text-[13px] text-slate-500">No uploads yet in this environment.</p>
+          )}
+          <ul className="divide-y divide-slate-100">
+            {history.map((h) => (
+              <li key={h.id}>
+                <button
+                  onClick={() => void loadDataset(h.id, null)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-[13px] hover:bg-slate-50 ${
+                    result?.datasetId === h.id ? "bg-slate-50" : ""
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <b className="block truncate font-semibold">{h.filename}</b>
+                    <span className="mono text-[11.5px] text-slate-400">
+                      {h.uploadedAt.replace("T", " ").slice(0, 19)}Z · {h.keptChecks.toLocaleString()} checks
+                    </span>
+                  </span>
+                  {result?.datasetId === h.id && <span className="pill pill-info">open</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
-      <StatsSection datasetId={result?.datasetId ?? null} summary={summary} loading={loadingSummary} />
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <UploadCard onProcessed={handleProcessed} />
 
-      <LogsView
-        key={result?.datasetId ?? "empty"}
-        datasetId={result?.datasetId ?? null}
-        services={result?.services ?? []}
-        dateMin={result?.dateMin ?? null}
-        dateMax={result?.dateMax ?? null}
-        initialLogs={initialLogs}
-      />
+        <StatsSection datasetId={result?.datasetId ?? null} summary={summary} loading={loadingSummary} />
+
+        <LogsView
+          key={result?.datasetId ?? "empty"}
+          datasetId={result?.datasetId ?? null}
+          services={result?.services ?? []}
+          dateMin={result?.dateMin ?? null}
+          dateMax={result?.dateMax ?? null}
+          initialLogs={initialLogs}
+        />
+      </div>
     </div>
   );
 }

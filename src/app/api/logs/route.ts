@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const pageSize = Math.min(
     200,
-    Math.max(10, Number.parseInt(searchParams.get("pageSize") ?? "50", 10) || 50),
+    Math.max(1, Number.parseInt(searchParams.get("pageSize") ?? "50", 10) || 50),
   );
 
   let rows = ds.checks;
@@ -64,7 +64,8 @@ export async function GET(req: Request) {
   });
 }
 
-function parseBound(raw: string | null, edge: "start" | "end"): string | null {
+/** Exported for unit testing. Date-only input covers the whole UTC day. */
+export function parseBound(raw: string | null, edge: "start" | "end"): string | null {
   if (!raw || !raw.trim()) return null;
   const t = raw.trim();
   // Date-only → whole UTC day.

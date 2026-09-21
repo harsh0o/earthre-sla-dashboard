@@ -15,10 +15,8 @@ async function main() {
     console.error("Missing SUPABASE_DB_PASSWORD env var.");
     process.exit(1);
   }
-  const sql = fs.readFileSync(
-    path.join(__dirname, "..", "supabase", "migrations", "001_init.sql"),
-    "utf8",
-  );
+  const dir = path.join(__dirname, "..", "supabase", "migrations");
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
   const client = new Client({
     host: `db.${ref}.supabase.co`,
     port: 5432,
@@ -29,7 +27,11 @@ async function main() {
   });
   await client.connect();
   try {
-    await client.query(sql);
+    for (const f of files) {
+      const sql = fs.readFileSync(path.join(dir, f), "utf8");
+      await client.query(sql);
+      console.log("Applied:", f);
+    }
     const tables = await client.query(
       `select table_name from information_schema.tables
        where table_schema='public' and table_name in ('datasets','checks','quarantine')
