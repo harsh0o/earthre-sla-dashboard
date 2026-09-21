@@ -10,6 +10,17 @@ import {
 
 export const runtime = "nodejs";
 
+export interface DayPoint {
+  date: string;
+  total: number;
+  up: number;
+  down: number;
+  downtimeMin: number;
+  availability: number;
+  creditEligible: boolean;
+  p95: number | null;
+}
+
 /** GET /api/summary?datasetId=… — availability, budget, latency, quality. */
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -51,6 +62,46 @@ export async function GET(req: Request) {
     return { month: m, ...summarize(rows) };
   });
 
+  // Daily series (overall) for heatmaps and sparklines.
+  const dayKeys = [...new Set(ds.checks.map((c) => c.ts.slice(0, 10)))].sort();
+  const daily: DayPoint[] = dayKeys.map((d) => {
+    const rows = ds.checks.filter((c) => c.ts.slice(0, 10) === d);
+    return { date: d, ...summarize(rows), p95: latencyStats(rows).p95 };
+  });
+
+  // Per-service daily availability cells for heat strips (null = no data that day).
+  const byServiceDays: Record<string, (number | null)[]> = {};
+  for (const sid of ds.report.services) {
+    byServiceDays[sid] = dayKeys.map((d) => {
+      const rows = ds.checks.filter(
+        (c) => c.serviceId === sid && c.ts.slice(0, 10) === d,
+      );
+      if (!rows.length) return null;
+      return summarize(rows).availability;
+    });
+  }
+
+  // Incident callouts: worst service-days below the SLA threshold.
+  const incidents = dayKeys
+    .flatMap((d) =>
+      ds.report.services.map((sid) => {
+        const rows = ds.checks.filter(
+          (c) => c.serviceId === sid && c.ts.slice(0, 10) === d,
+        );
+        if (!rows.length) return null;
+        const s = summarize(rows);
+        return {
+          serviceId: sid,
+          serviceName: rows[0].serviceName,
+          date: d,
+          ...s,
+        };
+      }),
+    )
+    .filter((x) => x != null && x.availability < SLA_THRESHOLD)
+    .sort((a, b) => a!.availability - b!.availability)
+    .slice(0, 3);
+
   return NextResponse.json({
     datasetId: ds.id,
     filename: ds.filename,
@@ -59,6 +110,10 @@ export async function GET(req: Request) {
     latency: latencyAll,
     byService,
     byMonth,
+    dayKeys,
+    daily,
+    byServiceDays,
+    incidents,
     quality: {
       quarantined: ds.report.quarantined,
       exactDupes: ds.report.exactDupesSuppressed,

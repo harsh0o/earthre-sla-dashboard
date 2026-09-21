@@ -18,6 +18,29 @@ export interface ProcessResult {
   persistent: boolean;
 }
 
+export interface DayPoint {
+  date: string;
+  total: number;
+  up: number;
+  down: number;
+  downtimeMin: number;
+  availability: number;
+  creditEligible: boolean;
+  p95: number | null;
+}
+
+export interface Incident {
+  serviceId: string;
+  serviceName: string;
+  date: string;
+  total: number;
+  up: number;
+  down: number;
+  downtimeMin: number;
+  availability: number;
+  creditEligible: boolean;
+}
+
 export interface ServiceSummary {
   serviceId: string;
   serviceName: string;
@@ -57,6 +80,10 @@ export interface SummaryResponse {
     availability: number;
     creditEligible: boolean;
   }[];
+  dayKeys: string[];
+  daily: DayPoint[];
+  byServiceDays: Record<string, (number | null)[]>;
+  incidents: Incident[];
   quality: {
     quarantined: number;
     exactDupes: number;

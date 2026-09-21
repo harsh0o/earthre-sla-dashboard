@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- plain Node ops script, not app code. */
 /**
  * Applies supabase/migrations/001_init.sql to the Supabase Postgres database.
  * Run:  $env:SUPABASE_DB_PASSWORD='<db-password>'; node scripts/migrate.cjs
