@@ -24,7 +24,7 @@ Browser (Next.js, Vercel)
   that — no local execution, no sticky state — while honoring the required Backend: Next.js.
   Pure logic lives in `src/lib/pipeline/` so it could move verbatim to Lambda later.
 - **Why Supabase Postgres:** free tier, real SQL (monthly SLA grouping + percentiles are natural),
-  re-queryable after upload, migration checked in at `supabase/migrations/001_init.sql`.
+  re-queryable after upload, migrations checked in at `supabase/migrations/` (applied live).
 - **Without keys (local dev):** the app runs in dev-memory mode (processes + shows everything, pill
   says so). Nothing persists across restarts. **Live review requires Supabase keys** (below).
 
@@ -63,8 +63,10 @@ surface as 5xx clusters — preserved as downtime, never smoothed.
 - **Threshold 99.9%**, error budget = 0.1% of month minutes, consumed = down_slots × 15.
   `creditEligible = availability < 0.999`. No invented credit tiers — just eligible/not + minutes.
 - **Latency is informational**: p50/p95/p99 over successful checks with valid latency only.
-- **Stats shown** (on-call + billing lens): overall availability + verdict, per-service table
-  (avail, up/down, downtime, budget left, p95, credit?), monthly bars, data-quality counts.
+- **Stats shown** (on-call + billing lens): dark command panel with availability ring + credit
+  verdict + error-budget bar; latency p50/p95/p99 with daily-p95 sparkline; monthly calendar bars;
+  auto-detected incident callouts (worst sub-SLA service-days); per-service rows with daily heat
+  strips; pipeline-quality counts.
 - **Logs**: single-date (whole UTC day) or range, service chips, All/Up/Down, 50/page.
 
 ## 4. Run locally
@@ -77,10 +79,11 @@ cp .env.example .env.local  # fill Supabase keys
 npm run dev   # http://localhost:3000
 ```
 
-Apply `supabase/migrations/001_init.sql` in the Supabase SQL editor once.
+Apply every file in `supabase/migrations/` in order (or run `node scripts/migrate.cjs`
+with `SUPABASE_DB_PASSWORD` set) — once.
 
 ```bash
-npm test        # vitest pipeline unit tests
+npm test        # 70 unit tests: pipeline, API routes, store, formatters, components, dataset conformance
 npm run build   # production build check
 ```
 
@@ -94,8 +97,8 @@ npm run build   # production build check
 
 ## 6. What I would do with more time
 
-- Supabase Auth-gated dataset history + saved views (currently out of scope per spec).
+- Supabase Auth-gated saved views (currently out of scope per spec).
 - Streaming parse + background job for >10MB files (current cap is deliberate for serverless limits).
-- Availability heatmap (service × day) and incident-streak detector from the 5xx clusters.
+- Week-over-week availability compare and alerting webhooks for new sub-SLA days.
 - Playwright e2e: upload fixture → verdict → date-filtered log row assertions.
 - Export quarantine report CSV for support/billing audit trail.
