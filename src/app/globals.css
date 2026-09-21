@@ -1,26 +1,65 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --canvas: #e8ecf1;
+  --ink: #1e293b;
+  --muted: #64748b;
+  --accent: #2563eb;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
+
+/* Restrained neumorphism: flat cards, soft dual shadow, 14px radius. */
+.neu {
+  background: #eef1f6;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    6px 6px 14px rgba(163, 177, 198, 0.45),
+    -6px -6px 14px rgba(255, 255, 255, 0.9);
+}
+
+.neu-inset {
+  background: #e2e7ee;
+  border-radius: 10px;
+  box-shadow:
+    inset 3px 3px 7px rgba(163, 177, 198, 0.5),
+    inset -3px -3px 7px rgba(255, 255, 255, 0.85);
+}
+
+.neu-btn {
+  border-radius: 10px;
+  background: linear-gradient(145deg, #f2f5fa, #dde3ec);
+  box-shadow:
+    4px 4px 10px rgba(163, 177, 198, 0.5),
+    -4px -4px 10px rgba(255, 255, 255, 0.9);
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.neu-btn:active {
+  box-shadow:
+    inset 3px 3px 7px rgba(163, 177, 198, 0.5),
+    inset -3px -3px 7px rgba(255, 255, 255, 0.85);
+  transform: translateY(1px);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pill-up { background: #dcfce7; color: #15803d; }
+.pill-down { background: #fee2e2; color: #b91c1c; }
+.pill-warn { background: #fef3c7; color: #b45309; }
+.pill-info { background: #dbeafe; color: #1d4ed8; }
+.pill-mute { background: #e2e8f0; color: #475569; }
+
+.num { font-variant-numeric: tabular-nums; }
